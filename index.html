@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Notificaciones</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .token-display {
+            background-color: #f3f3f3;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .notification {
+            background-color: #e9f7fe;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 3px;
+        }
+        .notification h3 {
+            margin-top: 0;
+            color: #3498db;
+        }
+        .notification-body {
+            color: #333;
+        }
+        .notification-token {
+            color: #777;
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+        .input-area {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        input {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #notifications-container {
+            margin-top: 20px;
+        }
+        .connection-status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sistema de Notificaciones WebSocket</h1>
+    
+    <div id="connection-status" class="connection-status disconnected">Desconectado</div>
+    
+    <div class="token-display">
+        <strong>Token:</strong> <span id="token">Esperando...</span>
+    </div>
+    
+    <div class="input-area">
+        <input type="text" id="message" placeholder="Escribe un mensaje...">
+        <button onclick="sendMessage()">Enviar</button>
+    </div>
+    
+    <h2>Notificaciones recibidas:</h2>
+    <div id="notifications-container"></div>
+    
+    <script>
+        const socket = new WebSocket('ws://localhost:8080/ws');
+        const notificationsContainer = document.getElementById('notifications-container');
+        const connectionStatus = document.getElementById('connection-status');
+        
+        socket.onopen = function(event) {
+            console.log('Conexión con el servidor establecida');
+            connectionStatus.textContent = 'Conectado';
+            connectionStatus.className = 'connection-status connected';
+        };
+        
+        socket.onclose = function(event) {
+            console.log('Conexión cerrada');
+            connectionStatus.textContent = 'Desconectado';
+            connectionStatus.className = 'connection-status disconnected';
+        };
+        
+        socket.onerror = function(event) {
+            console.log('Error:', event);
+            connectionStatus.textContent = 'Error de conexión';
+            connectionStatus.className = 'connection-status disconnected';
+        };
+        
+        socket.onmessage = function(event) {
+            console.log('Mensaje recibido:', event.data);
+            
+            try {
+                const message = JSON.parse(event.data);
+                
+                switch(message.event) {
+                    case "token":
+                        const spanToken = document.getElementById('token');
+                        spanToken.innerText = message.Data || "Token no disponible";
+                        break;
+                        
+                    case "notification":
+                        displayNotification(message.Data);
+                        // También mostramos una alerta como en tu código original
+                        if (typeof message.Data === 'string') {
+                            alert(message.Data);
+                        } else if (message.Data && message.Data.title) {
+                            alert(message.Data.title + (message.Data.body ? ": " + message.Data.body : ""));
+                        }
+                        break;
+                        
+                    default:
+                        console.log('Evento desconocido:', message.event);
+                }
+            } catch (error) {
+                console.error('Error al procesar el mensaje:', error);
+            }
+        };
+        
+        function displayNotification(data) {
+            const notificationDiv = document.createElement('div');
+            notificationDiv.className = 'notification';
+            
+            if (typeof data === 'string') {
+                notificationDiv.innerHTML = `
+                    <h3>Notificación</h3>
+                    <div class="notification-body">${data}</div>
+                `;
+            } else if (data && data.title) {
+                notificationDiv.innerHTML = `
+                    <h3>${data.title}</h3>
+                    ${data.body ? `<div class="notification-body">${data.body}</div>` : ''}
+                    ${data.token ? `<div class="notification-token">Token: ${data.token}</div>` : ''}
+                `;
+            } else {
+                notificationDiv.innerHTML = `
+                    <h3>Notificación recibida</h3>
+                    <div class="notification-body">Formato desconocido</div>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            }
+            
+            // Agregar la notificación al principio del contenedor
+            notificationsContainer.insertBefore(notificationDiv, notificationsContainer.firstChild);
+        }
+        
+        function sendMessage() {
+            const messageInput = document.getElementById('message');
+            const messageText = messageInput.value;
+            
+            if (messageText.trim() === '') {
+                alert('Por favor ingresa un mensaje');
+                return;
+            }
+            
+            const messageJson = JSON.stringify({
+                "event": "notification", 
+                "data": messageText
+            });
+            
+            try {
+                socket.send(messageJson);
+                console.log('Mensaje enviado:', messageJson);
+                messageInput.value = '';
+            } catch (error) {
+                console.error('Error al enviar mensaje:', error);
+                alert('Error al enviar mensaje. Por favor verifica la conexión.');
+            }
+        }
+    </script>
+</body>
+</html>
